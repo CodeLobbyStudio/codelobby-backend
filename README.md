@@ -1,3 +1,6 @@
+# CodeLobby Backend
+
+[![Backend CI](https://github.com/CodeLobbyStudio/codelobby-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/CodeLobbyStudio/codelobby-backend/actions/workflows/ci.yml)
 ## Uruchomienie lokalne
 
 ### Wymagania
