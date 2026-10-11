@@ -1,3 +1,17 @@
 spring:
   application:
     name: codelobby-backend
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:127.0.0.1}:${DB_PORT:55433}/${DB_NAME:codelobby}
+    username: ${DB_USER:codelobby}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
