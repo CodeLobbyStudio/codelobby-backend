@@ -20,7 +20,7 @@ import java.util.Base64;
 @Configuration
 public class JwtConfig {
 
-    public static final String ISSUER = "codelobby";
+    public static final String ISSUER = "https://codelobby.example";
 
     @Bean
     public SecretKey jwtSecretKey(
