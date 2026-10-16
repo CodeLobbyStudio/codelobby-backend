@@ -10,9 +10,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -21,6 +24,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import pl.codelobby.auth.config.JwtConfig;
+import pl.codelobby.auth.config.SecurityErrorHandler;
 
 import java.time.Instant;
 import java.util.Locale;
@@ -52,7 +56,13 @@ class AuthRegistrationIntegrationTest {
     private JwtDecoder jwtDecoder;
 
     @Autowired
+    private JwtEncoder jwtEncoder;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private SecurityErrorHandler securityErrorHandler;
 
     @BeforeEach
     void setUp() {
@@ -146,7 +156,15 @@ class AuthRegistrationIntegrationTest {
     void shouldRejectUnauthenticatedRequest() throws Exception {
 
         mockMvc.perform(get("/api/users/me"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_JSON
+                ))
+                .andExpect(jsonPath("$.code")
+                        .value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message")
+                        .value("Authentication is required"))
+                .andExpect(jsonPath("$.timestamp").exists());
     }
 
 
@@ -275,12 +293,52 @@ class AuthRegistrationIntegrationTest {
     @Test
     void shouldRejectInvalidJwt() throws Exception {
 
-        mockMvc.perform(get("/api/user/me")
+        mockMvc.perform(get("/api/users/me")
                 .header(
                         "Authorization",
                         "Bearer invalid.jwt.token"
                 ))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_JSON
+                ))
+                .andExpect(jsonPath("$.code")
+                        .value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @Test
+    void shouldReturnJsonForForbiddenAccess() throws Exception {
+
+        MockHttpServletRequest request =
+                new MockHttpServletRequest();
+
+        MockHttpServletResponse response =
+                new MockHttpServletResponse();
+
+        securityErrorHandler.handle(
+                request,
+                response,
+                new AccessDeniedException("Access denied")
+        );
+
+        assertEquals(403, response.getStatus());
+
+        String responseBody = response.getContentAsString();
+
+        assertEquals(
+                "FORBIDDEN",
+                JsonPath.read(responseBody, "$.code")
+        );
+
+        assertEquals(
+                "Access denied",
+                JsonPath.read(responseBody, "$.message")
+        );
+
+        assertNotNull(
+                JsonPath.read(responseBody, "$.timestamp")
+        );
     }
 
 
@@ -294,4 +352,101 @@ class AuthRegistrationIntegrationTest {
                 }
                 """.formatted(email, password);
     }
+
+    @Test
+    void shouldRejectExpiredJwt() throws Exception {
+
+        Instant now = Instant.now();
+
+        String token = createTestToken(
+                JwtConfig.ISSUER,
+                now.minusSeconds(7200),
+                now.minusSeconds(600)
+        );
+
+        mockMvc.perform(get("/api/users/me")
+                .header("Authorization",
+                        "Bearer" + token)
+        ).andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code")
+                        .value("UNAUTHORIZED"));
+
+
+    }
+
+    @Test
+    void shouldRejectJwtWithInvalidSignature() throws Exception {
+
+        Instant now = Instant.now();
+
+        String token = createTestToken(
+                JwtConfig.ISSUER,
+                now,
+                now.plusSeconds(3600)
+        );
+
+        int signatureStart = token.lastIndexOf('.') + 1;
+
+        char original = token.charAt(signatureStart);
+        char replacement = original == 'A' ? 'B' : 'A';
+
+        String tamperedToken =
+                token.substring(0, signatureStart)
+                + replacement
+                + token.substring(signatureStart + 1);
+
+        mockMvc.perform(get("/api/users/me")
+                .header(
+                        "Authorization",
+                        "Bearer " + tamperedToken
+                ))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code")
+                        .value("UNAUTHORIZED"));
+
+    }
+
+    @Test
+    void shouldRejectJwtWithWrongIssuer() throws Exception {
+
+        Instant now = Instant.now();
+
+        String token = createTestToken(
+                "https://another-service.example",
+                now,
+                now.plusSeconds(3600)
+        );
+
+        mockMvc.perform(get("/api/users/me")
+                .header(
+                        "Authorization",
+                        "Bearer " + token
+                ))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code")
+                        .value("UNAUTHORIZED"));
+    }
+
+
+    private String createTestToken(
+            String issuer,
+            Instant issuedAt,
+            Instant expiresAt
+    ) {
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(issuer)
+                .subject("123")
+                .issuedAt(issuedAt)
+                .expiresAt(expiresAt)
+                .build();
+
+        JwsHeader header = JwsHeader
+                .with(MacAlgorithm.HS256)
+                .build();
+
+        return jwtEncoder.encode(
+                JwtEncoderParameters.from(header, claims)
+        ).getTokenValue();
+    }
+
 }

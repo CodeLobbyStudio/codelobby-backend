@@ -16,7 +16,8 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(
-            HttpSecurity http
+            HttpSecurity http,
+            SecurityErrorHandler securityErrorHandler
     ) throws Exception {
 
         return http
@@ -48,21 +49,22 @@ public class SecurityConfig {
 
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint(
-                                (request, response, exception) ->
-                                        response.sendError(
-                                                HttpServletResponse.SC_UNAUTHORIZED
-                                        )
+                                securityErrorHandler
                         )
                         .accessDeniedHandler(
-                                (request, response, exception) ->
-                                        response.sendError(
-                                                HttpServletResponse.SC_FORBIDDEN
-                                        )
+                                securityErrorHandler
                         )
                 )
 
                 .oauth2ResourceServer(oauth -> oauth
-                        .jwt(Customizer.withDefaults()))
+                        .authenticationEntryPoint(
+                                securityErrorHandler
+                        )
+                        .accessDeniedHandler(
+                                securityErrorHandler
+                        )
+                        .jwt(Customizer.withDefaults())
+                )
 
                 .build();
     }
