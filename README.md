@@ -5,11 +5,15 @@
 
 ### Wymagania
 - Java 21
+- Docker Desktop do uruchomienia lokalnej bazy i testów integracyjnych
 
 ### Uruchomienie aplikacji
 
-Windows:
+Najpierw uruchom bazę i ustaw `DB_PASSWORD` oraz `JWT_SECRET_BASE64`, jak opisano poniżej. Potem w katalogu backendu uruchom:
+
+```powershell
 .\mvnw.cmd spring-boot:run
+```
 
 ### Uruchomienie testów
 
@@ -49,6 +53,8 @@ Parametry lokalnego połączenia:
 
 W PowerShell, w katalogu `codelobby-backend`:
 
+Poniższy fragment odczytuje hasło bazy z pliku `.env` i generuje lokalny sekret JWT. Obie zmienne będą ustawione w bieżącym oknie PowerShell.
+
 ```powershell
 $line = Get-Content ..\codelobby-infra\.env |
     Where-Object { $_ -match '^POSTGRES_PASSWORD=' } |
@@ -56,8 +62,18 @@ $line = Get-Content ..\codelobby-infra\.env |
 
 $env:DB_PASSWORD = $line.Substring('POSTGRES_PASSWORD='.Length)
 
+$key = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($key)
+$rng.Dispose()
+$env:JWT_SECRET_BASE64 = [Convert]::ToBase64String($key)
+
 .\mvnw.cmd spring-boot:run
 ```
+
+Sekret JWT musi mieć dokładnie 32 bajty po odkodowaniu Base64. Przy zmianie sekretu wcześniejsze tokeny przestają działać, więc przy kolejnych uruchomieniach możesz używać tej samej wartości. Nie zapisuj jej w repo.
+
+Jeśli uruchamiasz aplikację z IntelliJ, dodaj `DB_PASSWORD` i `JWT_SECRET_BASE64` w konfiguracji uruchomienia: **Run → Edit Configurations → Environment variables**.
 
 Flyway automatycznie wykonuje brakujące migracje podczas uruchamiania aplikacji.
 
@@ -73,7 +89,7 @@ Wymagany jest uruchomiony Docker Desktop.
 
 Testcontainers uruchamia osobny PostgreSQL na czas testów.
 
-Testy nie korzystają z lokalnej bazy developerskiej i nie wymagają ustawienia `DB_PASSWORD`.
+Testy nie korzystają z lokalnej bazy developerskiej. Mają też własny sekret JWT w `src/test/resources/application-test.yaml`, więc do testów nie trzeba ustawiać `DB_PASSWORD` ani `JWT_SECRET_BASE64`.
 
 ### Migracje
 
