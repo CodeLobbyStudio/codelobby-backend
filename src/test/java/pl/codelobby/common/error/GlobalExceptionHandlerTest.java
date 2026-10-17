@@ -1,26 +1,34 @@
-
 package pl.codelobby.common.error;
-
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.*;
+import pl.codelobby.auth.config.JwtConfig;
+
+import java.time.Instant;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest
+@WebMvcTest(controllers = GlobalExceptionHandlerTest.TestController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @Import({
         GlobalExceptionHandler.class,
         GlobalExceptionHandlerTest.TestController.class
 })
+@ActiveProfiles("test")
 class GlobalExceptionHandlerTest {
 
     @Autowired
@@ -92,6 +100,24 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code")
                         .value("FORBIDDEN"));
+    }
+
+    @Test
+    void shouldReturn405ForUnsupportedMethod() throws Exception {
+        mockMvc.perform(put("/test/validate"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.code")
+                        .value("METHOD_NOT_ALLOWED"));
+    }
+
+    @Test
+    void shouldReturn415ForUnsupportedContentType() throws Exception {
+        mockMvc.perform(post("/test/validate")
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .content("test@example.com"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.code")
+                        .value("UNSUPPORTED_MEDIA_TYPE"));
     }
 
     public record EmailRequest(

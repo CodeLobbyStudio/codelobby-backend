@@ -1,3 +1,4 @@
+
 spring:
   application:
     name: codelobby-backend
@@ -15,3 +16,7 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+
+app:
+  jwt:
+    secret-base64: ${JWT_SECRET_BASE64}
