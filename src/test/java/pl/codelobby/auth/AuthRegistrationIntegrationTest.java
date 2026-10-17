@@ -364,9 +364,14 @@ class AuthRegistrationIntegrationTest {
                 now.minusSeconds(600)
         );
 
+        assertThrows(
+                JwtValidationException.class,
+                () -> jwtDecoder.decode(token)
+        );
+
         mockMvc.perform(get("/api/users/me")
                 .header("Authorization",
-                        "Bearer" + token)
+                        "Bearer " + token)
         ).andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code")
                         .value("UNAUTHORIZED"));
