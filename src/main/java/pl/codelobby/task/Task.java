@@ -32,7 +32,7 @@ public class Task {
     private TaskType type;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(length = 20)
     private TaskDifficulty difficulty;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
