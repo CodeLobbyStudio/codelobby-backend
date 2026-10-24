@@ -3,6 +3,8 @@ package pl.codelobby.lobby;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Locale;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -21,12 +23,12 @@ public class LobbyJoinCodeNormalizerTest {
 
     @Test
     void shouldUseRootLocaleEvenWhenDefaultLocaleIsTurkish() {
-        java.util.Locale previous = java.util.Locale.getDefault();
+        Locale previous = Locale.getDefault();
         try {
-            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
             assertEquals("I2345678", normalizer.normalize("i2345678"));
         } finally {
-            java.util.Locale.setDefault(previous);
+            Locale.setDefault(previous);
         }
     }
 

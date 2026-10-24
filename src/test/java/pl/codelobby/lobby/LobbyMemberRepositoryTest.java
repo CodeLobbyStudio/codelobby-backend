@@ -14,7 +14,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import pl.codelobby.auth.User;
 import pl.codelobby.auth.UserRepository;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -50,7 +53,7 @@ class LobbyMemberRepositoryTest {
         assertEquals(guest.getId(), found.getUser().getId());
         assertEquals(LobbyRole.PARTICIPANT, found.getRole());
         // PostgreSQL stores microseconds, while the JVM may supply nanoseconds.
-        assertTrue(java.time.Duration.between(joinedAt, found.getJoinedAt()).abs().toNanos() <= 1000);
+        assertTrue(Duration.between(joinedAt, found.getJoinedAt()).abs().toNanos() <= 1000);
         assertFalse(found.getJoinedAt().isBefore(before));
         assertFalse(found.getJoinedAt().isAfter(Instant.now().plusSeconds(1)));
         assertEquals(LobbyRole.HOST, members.findById(hostMember.getId()).orElseThrow().getRole());
@@ -73,10 +76,10 @@ class LobbyMemberRepositoryTest {
         assertTrue(members.existsByLobby_IdAndUser_Id(second.getId(), alice.getId()));
         assertFalse(members.existsByLobby_IdAndUser_Id(first.getId(), bob.getId()));
         assertFalse(members.existsByLobby_IdAndUser_Id(second.getId(), outsider.getId()));
-        assertEquals(java.util.Set.of(secondHost.getId(), secondGuest.getId()),
-                members.findAllByLobby_Id(second.getId()).stream().map(LobbyMember::getId).collect(java.util.stream.Collectors.toSet()));
-        assertEquals(java.util.Set.of(firstHost.getId(), secondGuest.getId()),
-                members.findAllByUser_Id(alice.getId()).stream().map(LobbyMember::getId).collect(java.util.stream.Collectors.toSet()));
+        assertEquals(Set.of(secondHost.getId(), secondGuest.getId()),
+                members.findAllByLobby_Id(second.getId()).stream().map(LobbyMember::getId).collect(Collectors.toSet()));
+        assertEquals(Set.of(firstHost.getId(), secondGuest.getId()),
+                members.findAllByUser_Id(alice.getId()).stream().map(LobbyMember::getId).collect(Collectors.toSet()));
         assertTrue(members.findAllByUser_Id(outsider.getId()).isEmpty());
         assertTrue(members.findAllByLobby_Id(Long.MAX_VALUE).isEmpty());
     }
