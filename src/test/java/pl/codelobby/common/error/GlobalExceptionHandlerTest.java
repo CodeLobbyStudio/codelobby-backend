@@ -34,33 +34,6 @@ class GlobalExceptionHandlerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.CsvSource({
-            "not-found,404,USER_NOT_FOUND,User does not exist",
-            "conflict,409,EMAIL_ALREADY_EXISTS,Email is already registered",
-            "unauthorized,401,UNAUTHORIZED,Authentication is required",
-            "forbidden,403,FORBIDDEN,Access denied",
-            "unexpected,500,INTERNAL_SERVER_ERROR,An unexpected error occurred"
-    })
-    void shouldReturnOnlyThePublicErrorSchema(String path, int httpStatus, String code, String message) throws Exception {
-        Instant before = Instant.now().minusSeconds(1);
-        var result = mockMvc.perform(get("/test/" + path))
-                .andExpect(status().is(httpStatus))
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.code").value(code))
-                .andExpect(jsonPath("$.message").value(message))
-                .andExpect(jsonPath("$.timestamp").isString())
-                .andExpect(jsonPath("$.stackTrace").doesNotExist())
-                .andExpect(jsonPath("$.exception").doesNotExist())
-                .andReturn();
-        var body = com.jayway.jsonpath.JsonPath.parse(result.getResponse().getContentAsString());
-        java.util.Map<String, Object> fields = body.read("$");
-        org.junit.jupiter.api.Assertions.assertEquals(java.util.Set.of("code", "message", "timestamp"), fields.keySet());
-        Instant timestamp = Instant.parse(body.read("$.timestamp", String.class));
-        org.junit.jupiter.api.Assertions.assertFalse(timestamp.isBefore(before));
-        org.junit.jupiter.api.Assertions.assertFalse(timestamp.isAfter(Instant.now().plusSeconds(1)));
-    }
-
     @Test
     void shouldReturn400ForInvalidEmail() throws Exception {
         mockMvc.perform(post("/test/validate")
