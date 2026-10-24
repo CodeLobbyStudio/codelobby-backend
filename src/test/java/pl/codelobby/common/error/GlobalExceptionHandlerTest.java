@@ -1,8 +1,11 @@
 package pl.codelobby.common.error;
+import com.jayway.jsonpath.JsonPath;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -18,7 +21,11 @@ import org.springframework.web.bind.annotation.*;
 import pl.codelobby.auth.config.JwtConfig;
 
 import java.time.Instant;
+import java.util.Map;
+import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -34,8 +41,8 @@ class GlobalExceptionHandlerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.CsvSource({
+    @ParameterizedTest
+    @CsvSource({
             "not-found,404,USER_NOT_FOUND,User does not exist",
             "conflict,409,EMAIL_ALREADY_EXISTS,Email is already registered",
             "unauthorized,401,UNAUTHORIZED,Authentication is required",
@@ -53,12 +60,12 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.stackTrace").doesNotExist())
                 .andExpect(jsonPath("$.exception").doesNotExist())
                 .andReturn();
-        var body = com.jayway.jsonpath.JsonPath.parse(result.getResponse().getContentAsString());
-        java.util.Map<String, Object> fields = body.read("$");
-        org.junit.jupiter.api.Assertions.assertEquals(java.util.Set.of("code", "message", "timestamp"), fields.keySet());
+        var body = JsonPath.parse(result.getResponse().getContentAsString());
+        Map<String, Object> fields = body.read("$");
+        assertEquals(Set.of("code", "message", "timestamp"), fields.keySet());
         Instant timestamp = Instant.parse(body.read("$.timestamp", String.class));
-        org.junit.jupiter.api.Assertions.assertFalse(timestamp.isBefore(before));
-        org.junit.jupiter.api.Assertions.assertFalse(timestamp.isAfter(Instant.now().plusSeconds(1)));
+        assertFalse(timestamp.isBefore(before));
+        assertFalse(timestamp.isAfter(Instant.now().plusSeconds(1)));
     }
 
     @Test

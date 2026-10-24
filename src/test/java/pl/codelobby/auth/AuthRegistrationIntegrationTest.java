@@ -4,7 +4,9 @@ package pl.codelobby.auth;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -18,15 +20,18 @@ import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import pl.codelobby.auth.config.JwtConfig;
 import pl.codelobby.auth.config.SecurityErrorHandler;
+import pl.codelobby.auth.dto.LoginRequest;
+import pl.codelobby.auth.dto.RegisterRequest;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -94,10 +99,10 @@ class AuthRegistrationIntegrationTest {
 
     @Test
     void shouldNormalizeWhitespaceAndCaseAtTheServiceBoundary() {
-        var result = authService.register(new pl.codelobby.auth.dto.RegisterRequest(
+        var result = authService.register(new RegisterRequest(
                 "  MIXED@example.com  ", "Password123!"));
         assertEquals("mixed@example.com", result.email());
-        assertEquals(result.id(), authService.authenticate(new pl.codelobby.auth.dto.LoginRequest(
+        assertEquals(result.id(), authService.authenticate(new LoginRequest(
                 "  MIXED@example.com  ", "Password123!")).getId());
     }
 
@@ -111,8 +116,8 @@ class AuthRegistrationIntegrationTest {
         assertEquals(1, userRepository.count());
     }
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.CsvSource({"36,201", "37,400"})
+    @ParameterizedTest
+    @CsvSource({"36,201", "37,400"})
     void shouldEnforceUtf8ByteLimitForBcrypt(int characters, int expectedStatus) throws Exception {
         String password = "ą".repeat(characters); // 72 and 74 bytes, both <= 72 characters.
         var response = mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
@@ -127,14 +132,14 @@ class AuthRegistrationIntegrationTest {
         }
     }
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {
+    @ParameterizedTest
+    @ValueSource(strings = {
             "{\"email\":\"\",\"password\":\"Password123!\"}",
             "{\"email\":\"test@example.com\",\"password\":\"\"}",
             "{}", "{\"email\":null,\"password\":null}"
     })
     void shouldRejectMissingOrBlankFieldsWithoutInsertingUsers(String json) throws Exception {
-        for (String endpoint : java.util.List.of("register", "login")) {
+        for (String endpoint : List.of("register", "login")) {
             mockMvc.perform(post("/api/auth/" + endpoint).contentType(MediaType.APPLICATION_JSON).content(json))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
@@ -188,7 +193,7 @@ class AuthRegistrationIntegrationTest {
         assertEquals(user.getId().toString(), jwt.getSubject());
         assertEquals("codelobby", jwt.getIssuer().toString(), "Issuer contract specified in issue #43");
         assertNotNull(jwt.getIssuedAt());
-        assertEquals(java.time.Duration.ofMinutes(60), java.time.Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt()));
+        assertEquals(Duration.ofMinutes(60), Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt()));
     }
 
     @BeforeEach

@@ -1,19 +1,22 @@
 package pl.codelobby.auth;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.*;
 import pl.codelobby.auth.config.JwtConfig;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.Base64;
+import javax.crypto.SecretKey;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class JwtConfigTest {
     final JwtConfig config = new JwtConfig();
     // Test fixtures only; never use these keys outside tests.
-    final javax.crypto.SecretKey key = config.jwtSecretKey(Base64.getEncoder().encodeToString(new byte[32]));
+    final SecretKey key = config.jwtSecretKey(Base64.getEncoder().encodeToString(new byte[32]));
     final JwtEncoder encoder = config.jwtEncoder(key);
     final JwtDecoder decoder = config.jwtDecoder(key);
 
@@ -24,7 +27,7 @@ class JwtConfigTest {
 
     @Test
     void shouldVerifyHs256SubjectIssuerAndLifetime() {
-        Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         Jwt jwt = decoder.decode(token(encoder, JwtConfig.ISSUER, now, now.plusSeconds(3600)));
         assertEquals("HS256", jwt.getHeaders().get("alg"));
         assertEquals("42", jwt.getSubject());
@@ -44,7 +47,7 @@ class JwtConfigTest {
         String tampered = valid.substring(0, signature) + (valid.charAt(signature) == 'A' ? 'B' : 'A') + valid.substring(signature + 1);
         assertThrows(JwtException.class, () -> decoder.decode(tampered));
         byte[] otherKeyBytes = new byte[32];
-        java.util.Arrays.fill(otherKeyBytes, (byte) 1);
+        Arrays.fill(otherKeyBytes, (byte) 1);
         JwtEncoder otherSigner = config.jwtEncoder(config.jwtSecretKey(Base64.getEncoder().encodeToString(otherKeyBytes)));
         assertThrows(JwtException.class, () -> decoder.decode(token(otherSigner, JwtConfig.ISSUER, now, now.plusSeconds(3600))));
     }
