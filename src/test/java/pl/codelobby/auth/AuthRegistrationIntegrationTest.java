@@ -71,6 +71,28 @@ class AuthRegistrationIntegrationTest {
     private JwtService jwtService;
 
     @Test
+    void shouldTrimEmailBeforeHttpRegistrationValidation() throws Exception {
+        mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson("  PADDED@example.com  ", "Password123!")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("padded@example.com"));
+        mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson("  padded@EXAMPLE.COM  ", "Password123!")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"));
+        assertEquals(1, userRepository.count());
+    }
+
+    @Test
+    void shouldTrimEmailBeforeHttpLoginValidation() throws Exception {
+        userRepository.saveAndFlush(new User("padded@example.com", passwordEncoder.encode("Password123!")));
+        mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson("  PADDED@example.com  ", "Password123!")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
+
+    @Test
     void shouldNormalizeWhitespaceAndCaseAtTheServiceBoundary() {
         var result = authService.register(new pl.codelobby.auth.dto.RegisterRequest(
                 "  MIXED@example.com  ", "Password123!"));
@@ -164,7 +186,7 @@ class AuthRegistrationIntegrationTest {
         Jwt jwt = jwtDecoder.decode(jwtService.generateAccessToken(user));
         assertEquals("HS256", jwt.getHeaders().get("alg"));
         assertEquals(user.getId().toString(), jwt.getSubject());
-        assertEquals(JwtConfig.ISSUER, jwt.getIssuer().toString());
+        assertEquals("codelobby", jwt.getIssuer().toString(), "Issuer contract specified in issue #43");
         assertNotNull(jwt.getIssuedAt());
         assertEquals(java.time.Duration.ofMinutes(60), java.time.Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt()));
     }

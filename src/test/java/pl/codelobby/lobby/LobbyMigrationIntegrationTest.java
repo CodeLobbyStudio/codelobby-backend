@@ -95,6 +95,21 @@ class LobbyMigrationIntegrationTest {
     }
 
     @Test
+    void shouldRejectDuplicateParticipantsAndNullJoinedAt() throws SQLException {
+        flyway("3").migrate();
+        seed();
+        flyway(null).migrate();
+        execute("INSERT INTO lobby_members(lobby_id,user_id,role) VALUES (1,3,'PARTICIPANT')");
+        SQLException duplicate = assertThrows(SQLException.class, () -> execute(
+                "INSERT INTO lobby_members(lobby_id,user_id,role) VALUES (1,3,'PARTICIPANT')"));
+        assertEquals("23505", duplicate.getSQLState());
+        SQLException missingTimestamp = assertThrows(SQLException.class, () -> execute(
+                "INSERT INTO lobby_members(lobby_id,user_id,role,joined_at) VALUES (2,3,'PARTICIPANT',NULL)"));
+        assertEquals("23502", missingTimestamp.getSQLState());
+        assertEquals(List.of("3"), strings("SELECT count(*) FROM lobby_members"));
+    }
+
+    @Test
     void shouldCascadeOnlyMembershipsOfTheDeletedLobby() throws SQLException {
         flyway("3").migrate();
         seed();
