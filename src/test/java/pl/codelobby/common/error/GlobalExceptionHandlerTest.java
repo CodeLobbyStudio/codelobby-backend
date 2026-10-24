@@ -1,8 +1,11 @@
 package pl.codelobby.common.error;
+import com.jayway.jsonpath.JsonPath;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -18,7 +21,11 @@ import org.springframework.web.bind.annotation.*;
 import pl.codelobby.auth.config.JwtConfig;
 
 import java.time.Instant;
+import java.util.Map;
+import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -33,6 +40,33 @@ class GlobalExceptionHandlerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @ParameterizedTest
+    @CsvSource({
+            "not-found,404,USER_NOT_FOUND,User does not exist",
+            "conflict,409,EMAIL_ALREADY_EXISTS,Email is already registered",
+            "unauthorized,401,UNAUTHORIZED,Authentication is required",
+            "forbidden,403,FORBIDDEN,Access denied",
+            "unexpected,500,INTERNAL_SERVER_ERROR,An unexpected error occurred"
+    })
+    void shouldReturnOnlyThePublicErrorSchema(String path, int httpStatus, String code, String message) throws Exception {
+        Instant before = Instant.now().minusSeconds(1);
+        var result = mockMvc.perform(get("/test/" + path))
+                .andExpect(status().is(httpStatus))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value(code))
+                .andExpect(jsonPath("$.message").value(message))
+                .andExpect(jsonPath("$.timestamp").isString())
+                .andExpect(jsonPath("$.stackTrace").doesNotExist())
+                .andExpect(jsonPath("$.exception").doesNotExist())
+                .andReturn();
+        var body = JsonPath.parse(result.getResponse().getContentAsString());
+        Map<String, Object> fields = body.read("$");
+        assertEquals(Set.of("code", "message", "timestamp"), fields.keySet());
+        Instant timestamp = Instant.parse(body.read("$.timestamp", String.class));
+        assertFalse(timestamp.isBefore(before));
+        assertFalse(timestamp.isAfter(Instant.now().plusSeconds(1)));
+    }
 
     @Test
     void shouldReturn400ForInvalidEmail() throws Exception {
