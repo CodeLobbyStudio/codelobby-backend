@@ -83,7 +83,7 @@ class LobbyMigrationIntegrationTest {
             "1|1|'PARTICIPANT'|23505", "1|2|'HOST'|23505", "1|3|'ADMIN'|23514",
             "1|3|NULL|23502", "NULL|3|'PARTICIPANT'|23502", "1|NULL|'PARTICIPANT'|23502",
             "999|3|'PARTICIPANT'|23503", "1|999|'PARTICIPANT'|23503"
-    }, delimiter = '|')
+    }, delimiter = '|', quoteCharacter = '"')
     void shouldRejectInvalidMemberships(String lobby, String user, String role, String sqlState) throws SQLException {
         flyway("3").migrate();
         seed();
