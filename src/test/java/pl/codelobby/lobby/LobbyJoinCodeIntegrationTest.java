@@ -41,6 +41,9 @@ public class LobbyJoinCodeIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private LobbyMemberRepository memberRepository;
+
     @MockitoBean
     private LobbyJoinCodeGenerator generator;
 
@@ -48,6 +51,7 @@ public class LobbyJoinCodeIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        memberRepository.deleteAllInBatch();
         lobbyRepository.deleteAll();
         userRepository.deleteAll();
 
@@ -92,7 +96,37 @@ public class LobbyJoinCodeIntegrationTest {
 
         assertEquals(2, lobbyRepository.count());
 
+        assertEquals(2, memberRepository.count());
+        assertEquals(1, memberRepository.findAllByLobby_Id(lobby.getId()).size());
+
         verify(generator, times(2)).generate();
+    }
+
+    @Test
+    void shouldExhaustCollisionsWithoutPartialMembershipsAndThenRecover() {
+        persistenceService.save("Existing", "ABCD2345", host);
+        when(generator.generate()).thenReturn("ABCD2345");
+        assertThrows(IllegalStateException.class,
+                () -> joinCodeService.createLobby("Rejected", host));
+        verify(generator, times(10)).generate();
+        assertEquals(1, lobbyRepository.count());
+        assertEquals(1, memberRepository.count());
+        when(generator.generate()).thenReturn("PQRZ6789");
+        Lobby recovered = joinCodeService.createLobby("Recovered", host);
+        assertEquals(2, lobbyRepository.count());
+        assertEquals(2, memberRepository.count());
+        assertEquals(LobbyRole.HOST, memberRepository.findByLobby_IdAndUser_Id(
+                recovered.getId(), host.getId()).orElseThrow().getRole());
+    }
+
+    @Test
+    void shouldNotRetryAnUnrelatedRealDatabaseViolation() {
+        when(generator.generate()).thenReturn("ABCD2345");
+        assertThrows(DataIntegrityViolationException.class,
+                () -> joinCodeService.createLobby(null, host));
+        verify(generator, times(1)).generate();
+        assertEquals(0, lobbyRepository.count());
+        assertEquals(0, memberRepository.count());
     }
 
     @Test
