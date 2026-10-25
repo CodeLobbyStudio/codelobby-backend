@@ -2,8 +2,6 @@ package pl.codelobby.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import org.apache.juli.logging.Log;
 
 public record LoginRequest(
 
@@ -13,11 +11,12 @@ public record LoginRequest(
 
         @NotBlank
         String password
+
 ) {
 
-        public LoginRequest {
-                if (email != null) {
-                        email = email.trim();
-                }
+    public LoginRequest {
+        if (email != null) {
+            email = email.trim();
         }
+    }
 }
