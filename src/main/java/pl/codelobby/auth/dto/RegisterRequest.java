@@ -17,4 +17,10 @@ public record RegisterRequest(
         String password
 
 ) {
+
+        public RegisterRequest {
+                if (email != null) {
+                        email.trim();
+                }
+        }
 }
