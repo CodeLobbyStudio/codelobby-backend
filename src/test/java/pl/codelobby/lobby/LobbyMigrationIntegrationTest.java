@@ -9,7 +9,10 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -54,27 +57,28 @@ class LobbyMigrationIntegrationTest {
         execute("INSERT INTO lobbies(id,name,join_code,status,host_id) VALUES (1,'First','ABCD2345','WAITING',1),(2,'Second','PQRZ6789','WAITING',2)");
     }
 
+    // Exercise exactly V1-V4 even when newer migrations are added to the project.
     @Test
     void shouldMigrateFreshDatabaseAndInstallConstraintsAndIndexes() throws SQLException {
-        assertEquals(4, flyway(null).migrate().migrationsExecuted);
+        assertEquals(4, flyway("4").migrate().migrationsExecuted);
         assertEquals(List.of("1", "2", "3", "4"), strings("SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank"));
         assertTrue(strings("SELECT conname FROM pg_constraint WHERE conrelid='lobby_members'::regclass")
                 .containsAll(List.of("fk_lobby_members_lobby", "fk_lobby_members_user", "uk_lobby_members_lobby_user", "ck_lobby_members_role")));
         assertTrue(strings("SELECT indexname FROM pg_indexes WHERE tablename='lobby_members'")
                 .containsAll(List.of("uk_lobby_members_single_host", "idx_lobby_members_user_id", "uk_lobby_members_lobby_user")));
-        assertEquals(0, flyway(null).migrate().migrationsExecuted);
+        assertEquals(0, flyway("4").migrate().migrationsExecuted);
     }
 
     @Test
     void shouldBackfillExactlyOneMatchingHostPerExistingLobbyWithoutDataLoss() throws SQLException {
         flyway("3").migrate();
         seed();
-        assertEquals(1, flyway(null).migrate().migrationsExecuted);
+        assertEquals(1, flyway("4").migrate().migrationsExecuted);
         assertEquals(List.of("1:1:HOST", "2:2:HOST"), strings("SELECT lobby_id || ':' || user_id || ':' || role FROM lobby_members ORDER BY lobby_id"));
         assertEquals(List.of("3"), strings("SELECT count(*) FROM app_users"));
         assertEquals(List.of("First", "Second"), strings("SELECT name FROM lobbies ORDER BY id"));
         assertEquals(List.of("2"), strings("SELECT count(*) FROM lobby_members WHERE joined_at IS NOT NULL AND joined_at BETWEEN now()-interval '1 minute' AND now()+interval '1 minute'"));
-        assertEquals(0, flyway(null).migrate().migrationsExecuted);
+        assertEquals(0, flyway("4").migrate().migrationsExecuted);
         assertEquals(List.of("2"), strings("SELECT count(*) FROM lobby_members"));
     }
 
@@ -87,7 +91,7 @@ class LobbyMigrationIntegrationTest {
     void shouldRejectInvalidMemberships(String lobby, String user, String role, String sqlState) throws SQLException {
         flyway("3").migrate();
         seed();
-        flyway(null).migrate();
+        flyway("4").migrate();
         SQLException error = assertThrows(SQLException.class, () -> execute(
                 "INSERT INTO lobby_members(lobby_id,user_id,role) VALUES (" + lobby + "," + user + "," + role + ")"));
         assertEquals(sqlState, error.getSQLState());
@@ -98,7 +102,7 @@ class LobbyMigrationIntegrationTest {
     void shouldRejectDuplicateParticipantsAndNullJoinedAt() throws SQLException {
         flyway("3").migrate();
         seed();
-        flyway(null).migrate();
+        flyway("4").migrate();
         execute("INSERT INTO lobby_members(lobby_id,user_id,role) VALUES (1,3,'PARTICIPANT')");
         SQLException duplicate = assertThrows(SQLException.class, () -> execute(
                 "INSERT INTO lobby_members(lobby_id,user_id,role) VALUES (1,3,'PARTICIPANT')"));
@@ -113,7 +117,7 @@ class LobbyMigrationIntegrationTest {
     void shouldCascadeOnlyMembershipsOfTheDeletedLobby() throws SQLException {
         flyway("3").migrate();
         seed();
-        flyway(null).migrate();
+        flyway("4").migrate();
         execute("INSERT INTO lobby_members(lobby_id,user_id,role) VALUES (1,3,'PARTICIPANT'),(2,1,'PARTICIPANT')");
         execute("DELETE FROM lobbies WHERE id=1");
         assertEquals(List.of("2:1:PARTICIPANT", "2:2:HOST"), strings("SELECT lobby_id || ':' || user_id || ':' || role FROM lobby_members ORDER BY user_id"));
