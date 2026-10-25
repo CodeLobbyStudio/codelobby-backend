@@ -4,7 +4,9 @@ package pl.codelobby.auth;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -18,15 +20,18 @@ import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import pl.codelobby.auth.config.JwtConfig;
 import pl.codelobby.auth.config.SecurityErrorHandler;
+import pl.codelobby.auth.dto.LoginRequest;
+import pl.codelobby.auth.dto.RegisterRequest;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -63,6 +68,133 @@ class AuthRegistrationIntegrationTest {
 
     @Autowired
     private SecurityErrorHandler securityErrorHandler;
+
+    @Autowired
+    private AuthService authService;
+
+    @Autowired
+    private JwtService jwtService;
+
+    @Test
+    void shouldTrimEmailBeforeHttpRegistrationValidation() throws Exception {
+        mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson("  PADDED@example.com  ", "Password123!")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("padded@example.com"));
+        mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson("  padded@EXAMPLE.COM  ", "Password123!")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"));
+        assertEquals(1, userRepository.count());
+    }
+
+    @Test
+    void shouldTrimEmailBeforeHttpLoginValidation() throws Exception {
+        userRepository.saveAndFlush(new User("padded@example.com", passwordEncoder.encode("Password123!")));
+        mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson("  PADDED@example.com  ", "Password123!")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
+
+    @Test
+    void shouldNormalizeWhitespaceAndCaseAtTheServiceBoundary() {
+        var result = authService.register(new RegisterRequest(
+                "  MIXED@example.com  ", "Password123!"));
+        assertEquals("mixed@example.com", result.email());
+        assertEquals(result.id(), authService.authenticate(new LoginRequest(
+                "  MIXED@example.com  ", "Password123!")).getId());
+    }
+
+    @Test
+    void shouldRejectCaseVariantDuplicateAtTheApiBoundary() throws Exception {
+        userRepository.saveAndFlush(new User("duplicate@example.com", "hash"));
+        mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson("DUPLICATE@EXAMPLE.COM", "Password123!")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"));
+        assertEquals(1, userRepository.count());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"36,201", "37,400"})
+    void shouldEnforceUtf8ByteLimitForBcrypt(int characters, int expectedStatus) throws Exception {
+        String password = "ą".repeat(characters); // 72 and 74 bytes, both <= 72 characters.
+        var response = mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8").content(registerJson("bytes@example.com", password)))
+                .andExpect(status().is(expectedStatus));
+        if (expectedStatus == 400) {
+            response.andExpect(jsonPath("$.code").value("INVALID_PASSWORD"));
+            assertEquals(0, userRepository.count());
+        } else {
+            assertTrue(passwordEncoder.matches(password,
+                    userRepository.findByEmail("bytes@example.com").orElseThrow().getPasswordHash()));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"email\":\"\",\"password\":\"Password123!\"}",
+            "{\"email\":\"test@example.com\",\"password\":\"\"}",
+            "{}", "{\"email\":null,\"password\":null}"
+    })
+    void shouldRejectMissingOrBlankFieldsWithoutInsertingUsers(String json) throws Exception {
+        for (String endpoint : List.of("register", "login")) {
+            mockMvc.perform(post("/api/auth/" + endpoint).contentType(MediaType.APPLICATION_JSON).content(json))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        }
+        assertEquals(0, userRepository.count());
+    }
+
+    @Test
+    void shouldAcceptExactly72AsciiBytesAndReject73Characters() throws Exception {
+        mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson("boundary@example.com", "a".repeat(72))))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson("too-long@example.com", "a".repeat(73))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        assertEquals(1, userRepository.count());
+    }
+
+    @Test
+    void shouldKeepAuthenticationStatelessAndDisableBasicAndFormLogin() throws Exception {
+        User saved = userRepository.saveAndFlush(new User("stateless@example.com", "hash"));
+        String token = jwtService.generateAccessToken(saved);
+        var result = mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn();
+        assertNull(result.getRequest().getSession(false));
+        assertNull(result.getResponse().getHeader("Set-Cookie"));
+        mockMvc.perform(get("/api/users/me")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Basic dXNlcjpwYXNz"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/login")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
+        mockMvc.perform(get("/actuator/info")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldRejectTokenForADeletedUser() throws Exception {
+        User saved = userRepository.saveAndFlush(new User("deleted@example.com", "hash"));
+        String token = jwtService.generateAccessToken(saved);
+        userRepository.deleteById(saved.getId());
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_TOKEN"));
+    }
+
+    @Test
+    void shouldIssueHs256WithPositiveConfiguredLifetime() {
+        User user = userRepository.saveAndFlush(new User("claims@example.com", "hash"));
+        Jwt jwt = jwtDecoder.decode(jwtService.generateAccessToken(user));
+        assertEquals("HS256", jwt.getHeaders().get("alg"));
+        assertEquals(user.getId().toString(), jwt.getSubject());
+        assertEquals("https://codelobby.example", jwt.getIssuer().toString(), "Issuer contract specified in issue #43");
+        assertNotNull(jwt.getIssuedAt());
+        assertEquals(Duration.ofMinutes(60), Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt()));
+    }
 
     @BeforeEach
     void setUp() {
