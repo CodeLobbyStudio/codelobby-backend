@@ -2,7 +2,6 @@ package pl.codelobby.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record RegisterRequest(
@@ -18,9 +17,9 @@ public record RegisterRequest(
 
 ) {
 
-        public RegisterRequest {
-                if (email != null) {
-                        email.trim();
-                }
+    public RegisterRequest {
+        if (email != null) {
+            email = email.trim();
         }
+    }
 }
