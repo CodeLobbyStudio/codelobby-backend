@@ -8,5 +8,4 @@ public interface LobbyRepository extends JpaRepository<Lobby, Long> {
 
     Optional<Lobby> findByJoinCode(String joinCode);
 
-    boolean existsByJoinCode(String joinCode);
 }

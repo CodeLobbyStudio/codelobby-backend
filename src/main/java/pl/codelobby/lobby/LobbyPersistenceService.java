@@ -9,9 +9,12 @@ import pl.codelobby.auth.User;
 public class LobbyPersistenceService {
 
     private final LobbyRepository lobbyRepository;
+    private final LobbyMemberRepository lobbyMemberRepository;
 
-    public LobbyPersistenceService(LobbyRepository lobbyRepository) {
+    public LobbyPersistenceService(LobbyRepository lobbyRepository,
+                                   LobbyMemberRepository lobbyMemberRepository) {
         this.lobbyRepository = lobbyRepository;
+        this.lobbyMemberRepository = lobbyMemberRepository;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -20,8 +23,18 @@ public class LobbyPersistenceService {
             String joinCode,
             User host
     ) {
-        Lobby lobby = new Lobby(name, joinCode, host);
+        Lobby lobby = lobbyRepository.saveAndFlush(
+                new Lobby(name, joinCode, host)
+        );
 
-        return lobbyRepository.saveAndFlush(lobby);
+        LobbyMember hostMembership = new LobbyMember(
+                lobby,
+                host,
+                LobbyRole.HOST
+        );
+
+        lobbyMemberRepository.saveAndFlush(hostMembership);
+
+        return lobby;
     }
 }
