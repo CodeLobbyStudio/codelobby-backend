@@ -191,7 +191,7 @@ class AuthRegistrationIntegrationTest {
         Jwt jwt = jwtDecoder.decode(jwtService.generateAccessToken(user));
         assertEquals("HS256", jwt.getHeaders().get("alg"));
         assertEquals(user.getId().toString(), jwt.getSubject());
-        assertEquals("codelobby", jwt.getIssuer().toString(), "Issuer contract specified in issue #43");
+        assertEquals("https://codelobby.example", jwt.getIssuer().toString(), "Issuer contract specified in issue #43");
         assertNotNull(jwt.getIssuedAt());
         assertEquals(Duration.ofMinutes(60), Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt()));
     }
