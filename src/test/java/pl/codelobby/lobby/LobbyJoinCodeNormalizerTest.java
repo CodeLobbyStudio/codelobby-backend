@@ -1,14 +1,15 @@
 package pl.codelobby.lobby;
 
-
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceAccessMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class LobbyJoinCodeNormalizerTest {
+class LobbyJoinCodeNormalizerTest {
 
     private final LobbyJoinCodeNormalizer normalizer =
             new LobbyJoinCodeNormalizer();
@@ -22,6 +23,7 @@ public class LobbyJoinCodeNormalizerTest {
     }
 
     @Test
+    @ResourceLock(value = "default-locale", mode = ResourceAccessMode.READ_WRITE)
     void shouldUseRootLocaleEvenWhenDefaultLocaleIsTurkish() {
         Locale previous = Locale.getDefault();
         try {
