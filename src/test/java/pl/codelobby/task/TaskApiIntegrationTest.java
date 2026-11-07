@@ -11,6 +11,12 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import pl.codelobby.auth.config.JwtConfig;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Container;
@@ -21,6 +27,8 @@ import pl.codelobby.auth.User;
 import pl.codelobby.auth.UserRepository;
 
 import java.util.Locale;
+import java.time.Instant;
+import java.util.StringJoiner;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -38,6 +46,7 @@ class TaskApiIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired UserRepository users;
     @Autowired JwtService tokens;
+    @Autowired JwtEncoder encoder;
     String token;
     User author;
 
@@ -122,6 +131,28 @@ class TaskApiIntegrationTest {
     void shouldRejectDuplicateLanguagesAndOversizedUtf8Content() throws Exception {
         reject(request(language("JAVA", "main.txt", "") + "," + language("JAVA", "other.txt", "")), "INVALID_TASK_FILES");
         reject(request(language("JAVA", "main.txt", "ą".repeat(65537))), "INVALID_TASK_FILES");
+    }
+
+    @Test
+    void shouldRejectExpiredSignedToken() throws Exception {
+        Instant now = Instant.now();
+        String expired = encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(),
+                JwtClaimsSet.builder().issuer(JwtConfig.ISSUER).subject(author.getId().toString())
+                        .issuedAt(now.minusSeconds(7200)).expiresAt(now.minusSeconds(600)).build())).getTokenValue();
+        mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + expired)
+                        .contentType(MediaType.APPLICATION_JSON).content(request(language("JAVA", "main.txt", ""))))
+                .andExpect(status().isUnauthorized());
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM tasks", Long.class));
+    }
+
+    @Test
+    void shouldRejectAggregateUtf8LimitEvenWhenEachFileFits() throws Exception {
+        StringJoiner files = new StringJoiner(",");
+        for (int i = 0; i < 9; i++) {
+            files.add("{\"path\":\"file" + i + ".txt\",\"type\":\""
+                    + (i == 0 ? "EDITABLE" : "HIDDEN_TEST") + "\",\"content\":\"" + "ą".repeat(65536) + "\"}");
+        }
+        reject(request("{\"language\":\"JAVA\",\"files\":[" + files + "]}"), "INVALID_TASK_FILES");
     }
 
     @Test
