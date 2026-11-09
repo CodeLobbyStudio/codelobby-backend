@@ -3,8 +3,11 @@ package pl.codelobby.lobby;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import pl.codelobby.auth.User;
+import pl.codelobby.task.ProgrammingLanguage;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "lobbies")
@@ -31,6 +34,12 @@ public class Lobby {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "host_id", nullable = false)
     private User host;
+
+    @ElementCollection
+    @CollectionTable(name = "lobby_languages", joinColumns = @JoinColumn(name = "lobby_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "language", nullable = false, length = 20)
+    private Set<ProgrammingLanguage> allowedLanguages = new HashSet<>();
 
     protected Lobby() {
     }
