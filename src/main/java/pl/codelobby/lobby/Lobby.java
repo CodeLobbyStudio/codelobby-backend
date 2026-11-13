@@ -4,9 +4,12 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import pl.codelobby.auth.User;
 import pl.codelobby.task.ProgrammingLanguage;
+import pl.codelobby.task.Task;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -41,13 +44,21 @@ public class Lobby {
     @Column(name = "language", nullable = false, length = 20)
     private Set<ProgrammingLanguage> allowedLanguages = new HashSet<>();
 
+    @OneToMany(mappedBy = "lobby", cascade = CascadeType.PERSIST)
+    List<LobbyTask> taskList = new ArrayList<>();
+
     protected Lobby() {
     }
 
     public Lobby(String name, String joinCode, User host) {
+        this(name, joinCode, host, Set.of());
+    }
+
+    public Lobby(String name, String joinCode, User host, Set<ProgrammingLanguage> allowedLanguages) {
         this.name = name;
         this.joinCode = joinCode;
         this.host = host;
+        this.allowedLanguages.addAll(allowedLanguages);
     }
 
     public Long getId() {
@@ -72,5 +83,10 @@ public class Lobby {
 
     public User getHost() {
         return host;
+    }
+
+    public void addTask(Task task, int position) {
+        LobbyTask lobbyTask = new LobbyTask(this, task, position, allowedLanguages);
+        taskList.add(lobbyTask);
     }
 }

@@ -5,6 +5,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import pl.codelobby.auth.User;
 
+import java.util.Set;
+
 @Service
 public class LobbyPersistenceService {
 
@@ -24,7 +26,7 @@ public class LobbyPersistenceService {
             User host
     ) {
         Lobby lobby = lobbyRepository.saveAndFlush(
-                new Lobby(name, joinCode, host)
+                new Lobby(name, joinCode, host, Set.of())
         );
 
         LobbyMember hostMembership = new LobbyMember(
