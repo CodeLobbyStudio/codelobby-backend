@@ -32,6 +32,8 @@ public class LobbyTask {
     @OneToMany(mappedBy = "lobbyTask", cascade = CascadeType.PERSIST)
     private List<LobbyTaskFile> files = new ArrayList<>();
 
+    @Column(name = "description_snapshot", nullable = false, columnDefinition = "TEXT")
+    private String descriptionSnapshot;
 
     protected LobbyTask() {}
 
@@ -39,6 +41,7 @@ public class LobbyTask {
         this.lobby = lobby;
         this.task = task;
         this.position = position;
+        this.descriptionSnapshot = task.getDescription();
 
         for (TaskLanguage taskLanguage : task.getLanguages()) {
             ProgrammingLanguage language = taskLanguage.getLanguage();

@@ -5,7 +5,11 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import pl.codelobby.auth.User;
+import pl.codelobby.task.ProgrammingLanguage;
 
+import java.util.List;
+import java.util.Set;
+import java.util.function.Function;
 @Service
 public class LobbyJoinCodeService {
 
@@ -25,15 +29,31 @@ public class LobbyJoinCodeService {
     }
 
     public Lobby createLobby(String name, User host) {
+        return saveWithUniqueJoinCode(
+                code -> persistenceService.save(name, code, host)
+        );
+    }
 
+    public Lobby createLobby(
+            String name,
+            User host,
+            List<Long> taskIds,
+            Set<ProgrammingLanguage> allowedLanguages
+    ) {
+        return saveWithUniqueJoinCode(
+                code -> persistenceService.save(
+                        name, code, host, taskIds, allowedLanguages
+                )
+        );
+    }
+
+    private Lobby saveWithUniqueJoinCode(Function<String, Lobby> saveLobby) {
         for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-
             String code = generator.generate();
 
             try {
-                return persistenceService.save(name, code, host);
+                return saveLobby.apply(code);
             } catch (DataIntegrityViolationException exception) {
-
                 if (!isJoinCodeCollision(exception)) {
                     throw exception;
                 }
