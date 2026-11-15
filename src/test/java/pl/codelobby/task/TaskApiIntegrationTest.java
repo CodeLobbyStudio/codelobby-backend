@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -29,12 +30,18 @@ import pl.codelobby.auth.UserRepository;
 import java.util.Locale;
 import java.time.Instant;
 import java.util.StringJoiner;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.HashMap;
+import java.util.HashSet;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties = "DB_PASSWORD=unused")
+@SpringBootTest(properties = {"DB_PASSWORD=unused", "spring.jpa.open-in-view=false"})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
@@ -55,6 +62,105 @@ class TaskApiIntegrationTest {
         jdbc.execute("TRUNCATE tasks, app_users CASCADE");
         author = users.saveAndFlush(new User("author@example.com", "test-hash"));
         token = tokens.generateAccessToken(author);
+    }
+
+    String editLanguage(String name) {
+        return """
+                {"language":"%s","files":[
+                {"path":"main.txt","type":"EDITABLE","content":"// TODO %s żółć"},
+                {"path":"library.txt","type":"READ_ONLY","content":""},
+                {"path":"visible.txt","type":"VISIBLE_TEST","content":"visible UTF-8 ą"},
+                {"path":"hidden.txt","type":"HIDDEN_TEST","content":"private-fixture-secret-913 %s"}]}
+                """.formatted(name, name, name);
+    }
+
+    long createTask(String body, String bearer) throws Exception {
+        var response = mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + bearer)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn();
+        return JsonPath.<Number>read(response.getResponse().getContentAsString(), "$.id").longValue();
+    }
+
+    Map<String, Set<Map<String, Object>>> languageFiles(String json) {
+        List<Map<String, Object>> languages = JsonPath.read(json, "$.languages");
+        Map<String, Set<Map<String, Object>>> result = new HashMap<>();
+        for (Map<String, Object> language : languages) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> files = (List<Map<String, Object>>) language.get("files");
+            assertEquals(Set.of("language", "files"), language.keySet());
+            for (Map<String, Object> file : files) {
+                assertEquals(Set.of("path", "type", "content"), file.keySet());
+            }
+            assertEquals(files.size(), new HashSet<>(files).size());
+            assertNull(result.put((String) language.get("language"), new HashSet<>(files)));
+        }
+        return result;
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+    void shouldReadExactlyTheAuthorsEditDtoWithoutChangingStoredData(boolean cpp, boolean difficulty) throws Exception {
+        String body = request(editLanguage("JAVA") + (cpp ? "," + editLanguage("CPP") : ""));
+        if (difficulty) body = body.replace("\"title\":", "\"difficulty\":\"EASY\",\"title\":");
+        long id = createTask(body, token);
+        var tasksBefore = jdbc.queryForList("SELECT * FROM tasks ORDER BY id");
+        var languagesBefore = jdbc.queryForList("SELECT * FROM task_languages ORDER BY id");
+        var filesBefore = jdbc.queryForList("SELECT * FROM task_files ORDER BY id");
+        String response = mvc.perform(get("/api/tasks/{id}/edit", id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(id)).andExpect(jsonPath("$.title").value("Practice"))
+                .andExpect(jsonPath("$.description").value("Description"))
+                .andReturn().getResponse().getContentAsString();
+        Map<String, Object> dto = JsonPath.read(response, "$");
+        assertEquals(Set.of("id", "title", "description", "difficulty", "languages"), dto.keySet());
+        assertEquals(difficulty ? "EASY" : null, dto.get("difficulty"));
+        assertEquals(languageFiles(body), languageFiles(response));
+        assertEquals(tasksBefore, jdbc.queryForList("SELECT * FROM tasks ORDER BY id"));
+        assertEquals(languagesBefore, jdbc.queryForList("SELECT * FROM task_languages ORDER BY id"));
+        assertEquals(filesBefore, jdbc.queryForList("SELECT * FROM task_files ORDER BY id"));
+    }
+
+    @Test
+    void shouldDenyOtherUserWithoutLeakingFilesAndAllowTheirOwnTask() throws Exception {
+        long id = createTask(request(editLanguage("JAVA")), token);
+        User other = users.saveAndFlush(new User("other@example.com", "test-hash"));
+        String otherToken = tokens.generateAccessToken(other);
+        String denied = mvc.perform(get("/api/tasks/{id}/edit", id).header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("TASK_ACCESS_DENIED"))
+                .andReturn().getResponse().getContentAsString();
+        Map<String, Object> error = JsonPath.read(denied, "$");
+        assertEquals(Set.of("code", "message", "timestamp"), error.keySet());
+        for (String secret : List.of("main.txt", "library.txt", "visible.txt", "hidden.txt", "private-fixture-secret-913", "żółć")) {
+            assertFalse(denied.contains(secret));
+        }
+        long ownId = createTask(request(editLanguage("CPP")), otherToken);
+        mvc.perform(get("/api/tasks/{id}/edit", ownId).header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(ownId));
+    }
+
+    @Test
+    void shouldReturnNotFoundForAuthenticatedUser() throws Exception {
+        mvc.perform(get("/api/tasks/{id}/edit", Long.MAX_VALUE).header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("TASK_NOT_FOUND"));
+    }
+
+    @Test
+    void shouldRejectMissingInvalidExpiredAndDeletedUserTokensOnGet() throws Exception {
+        long id = createTask(request(editLanguage("JAVA")), token);
+        mvc.perform(get("/api/tasks/{id}/edit", id)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/tasks/{id}/edit", id).header("Authorization", "Bearer invalid.jwt.token"))
+                .andExpect(status().isUnauthorized());
+        Instant now = Instant.now();
+        String expired = encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(),
+                JwtClaimsSet.builder().issuer(JwtConfig.ISSUER).subject(author.getId().toString())
+                        .issuedAt(now.minusSeconds(7200)).expiresAt(now.minusSeconds(600)).build())).getTokenValue();
+        mvc.perform(get("/api/tasks/{id}/edit", id).header("Authorization", "Bearer " + expired))
+                .andExpect(status().isUnauthorized());
+        User removed = users.saveAndFlush(new User("removed@example.com", "test-hash"));
+        String removedToken = tokens.generateAccessToken(removed);
+        users.deleteById(removed.getId());
+        mvc.perform(get("/api/tasks/{id}/edit", id).header("Authorization", "Bearer " + removedToken))
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("INVALID_TOKEN"));
     }
 
     String language(String name, String path, String content) {

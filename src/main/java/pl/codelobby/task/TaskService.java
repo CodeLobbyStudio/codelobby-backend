@@ -6,9 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import pl.codelobby.auth.User;
 import pl.codelobby.auth.UserRepository;
 import pl.codelobby.common.error.ApiException;
-import pl.codelobby.task.dto.CreateTaskRequest;
-import pl.codelobby.task.dto.TaskFileRequest;
-import pl.codelobby.task.dto.TaskLanguageRequest;
+import pl.codelobby.task.dto.*;
 import pl.codelobby.task.validation.TaskFileValidator;
 
 @Service
@@ -44,6 +42,36 @@ public class TaskService {
         Task savedTask = taskRepository.save(task);
 
         return savedTask.getId();
+    }
+
+    @Transactional(readOnly = true)
+    public TaskEditResponse getTaskForEdit(Long taskId, Long userId) {
+        User currentUser = getAuthor(userId);
+
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.NOT_FOUND,
+                        "TASK_NOT_FOUND",
+                        "Task not found"
+                ));
+
+        if (!task.getAuthor().getId().equals(currentUser.getId())) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "TASK_ACCESS_DENIED",
+                    "Only the task author can access this task for editing"
+            );
+        }
+
+        return new TaskEditResponse(
+                task.getId(),
+                task.getTitle(),
+                task.getDescription(),
+                task.getDifficulty(),
+                task.getLanguages().stream()
+                        .map(this::toLanguageResponse)
+                        .toList()
+        );
     }
 
     public User getAuthor(Long authorId) {
@@ -83,5 +111,22 @@ public class TaskService {
         }
 
         return task;
+    }
+
+    private TaskLanguageResponse toLanguageResponse(TaskLanguage taskLanguage) {
+        return new TaskLanguageResponse(
+                taskLanguage.getLanguage(),
+                taskLanguage.getFiles().stream()
+                        .map(this::toFileResponse)
+                        .toList()
+        );
+    }
+
+    private TaskFileResponse toFileResponse(TaskFile taskFile) {
+        return new TaskFileResponse(
+                taskFile.getPath(),
+                taskFile.getType(),
+                taskFile.getContent()
+        );
     }
 }
