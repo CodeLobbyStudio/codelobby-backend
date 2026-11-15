@@ -1,7 +1,5 @@
 package pl.codelobby.lobby;
 
-package pl.codelobby.lobby;
-
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,7 +42,9 @@ public class LobbyController {
                 request.name().strip(),
                 host,
                 request.taskIds(),
-                request.allowedLanguages()
+                request.allowedLanguages(),
+                request.maxParticipants(),
+                request.durationMinutes()
         );
 
         CreateLobbyResponse response = new CreateLobbyResponse(
@@ -52,7 +52,9 @@ public class LobbyController {
                 lobby.getName(),
                 lobby.getJoinCode(),
                 "/lobbies/join?code=" + lobby.getJoinCode(),
-                lobby.getStatus()
+                lobby.getStatus(),
+                lobby.getMaxParticipants(),
+                lobby.getDurationMinutes()
         );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

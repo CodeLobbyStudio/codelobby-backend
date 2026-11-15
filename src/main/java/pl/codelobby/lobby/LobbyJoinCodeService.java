@@ -1,4 +1,3 @@
-
 package pl.codelobby.lobby;
 
 import org.hibernate.exception.ConstraintViolationException;
@@ -10,12 +9,12 @@ import pl.codelobby.task.ProgrammingLanguage;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
+
 @Service
 public class LobbyJoinCodeService {
 
     private static final int MAX_ATTEMPTS = 10;
-    private static final String JOIN_CODE_CONSTRAINT =
-            "uk_lobbies_join_code";
+    private static final String JOIN_CODE_CONSTRAINT = "uk_lobbies_join_code";
 
     private final LobbyJoinCodeGenerator generator;
     private final LobbyPersistenceService persistenceService;
@@ -38,11 +37,19 @@ public class LobbyJoinCodeService {
             String name,
             User host,
             List<Long> taskIds,
-            Set<ProgrammingLanguage> allowedLanguages
+            Set<ProgrammingLanguage> allowedLanguages,
+            int maxParticipants,
+            int durationMinutes
     ) {
         return saveWithUniqueJoinCode(
                 code -> persistenceService.save(
-                        name, code, host, taskIds, allowedLanguages
+                        name,
+                        code,
+                        host,
+                        taskIds,
+                        allowedLanguages,
+                        maxParticipants,
+                        durationMinutes
                 )
         );
     }
@@ -66,14 +73,11 @@ public class LobbyJoinCodeService {
     }
 
     private boolean isJoinCodeCollision(Throwable exception) {
-
         Throwable cause = exception;
 
         while (cause != null) {
-
             if (cause instanceof ConstraintViolationException violation
-                    && JOIN_CODE_CONSTRAINT.equalsIgnoreCase(
-                    violation.getConstraintName())) {
+                    && JOIN_CODE_CONSTRAINT.equalsIgnoreCase(violation.getConstraintName())) {
                 return true;
             }
 

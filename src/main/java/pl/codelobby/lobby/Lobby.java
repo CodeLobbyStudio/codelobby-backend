@@ -44,6 +44,15 @@ public class Lobby {
     @Column(name = "language", nullable = false, length = 20)
     private Set<ProgrammingLanguage> allowedLanguages = new HashSet<>();
 
+    static final int DEFAULT_MAX_PARTICIPANTS = 10;
+    static final int DEFAULT_DURATION_MINUTES = 30;
+
+    @Column(name = "max_participants", nullable = false)
+    private int maxParticipants;
+
+    @Column(name = "duration_minutes", nullable = false)
+    private int durationMinutes;
+
     @OneToMany(mappedBy = "lobby", cascade = CascadeType.PERSIST)
     List<LobbyTask> taskList = new ArrayList<>();
 
@@ -54,11 +63,29 @@ public class Lobby {
         this(name, joinCode, host, Set.of());
     }
 
-    public Lobby(String name, String joinCode, User host, Set<ProgrammingLanguage> allowedLanguages) {
+    public Lobby(String name, String joinCode, User host,
+                 Set<ProgrammingLanguage> allowedLanguages) {
+        this(name, joinCode, host, allowedLanguages,
+                DEFAULT_MAX_PARTICIPANTS, DEFAULT_DURATION_MINUTES);
+    }
+
+    public Lobby(String name, String joinCode, User host,
+                 Set<ProgrammingLanguage> allowedLanguages,
+                 int maxParticipants, int durationMinutes) {
         this.name = name;
         this.joinCode = joinCode;
         this.host = host;
         this.allowedLanguages.addAll(allowedLanguages);
+        this.maxParticipants = maxParticipants;
+        this.durationMinutes = durationMinutes;
+    }
+
+    public int getMaxParticipants() {
+        return maxParticipants;
+    }
+
+    public int getDurationMinutes() {
+        return durationMinutes;
     }
 
     public Long getId() {

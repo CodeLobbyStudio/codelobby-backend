@@ -29,7 +29,15 @@ public class LobbyPersistenceService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Lobby save(String name, String joinCode, User host) {
-        return save(name, joinCode, host, List.of(), Set.of());
+        return save(
+                name,
+                joinCode,
+                host,
+                List.of(),
+                Set.of(),
+                Lobby.DEFAULT_MAX_PARTICIPANTS,
+                Lobby.DEFAULT_DURATION_MINUTES
+        );
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -38,13 +46,22 @@ public class LobbyPersistenceService {
             String joinCode,
             User host,
             List<Long> taskIds,
-            Set<ProgrammingLanguage> allowedLanguages
+            Set<ProgrammingLanguage> allowedLanguages,
+            int maxParticipants,
+            int durationMinutes
     ) {
         List<Task> selectedTasks = taskSelectionService.selectTasks(
                 host.getId(), taskIds, allowedLanguages
         );
 
-        Lobby lobby = new Lobby(name, joinCode, host, allowedLanguages);
+        Lobby lobby = new Lobby(
+                name,
+                joinCode,
+                host,
+                allowedLanguages,
+                maxParticipants,
+                durationMinutes
+        );
 
         for (int position = 0; position < selectedTasks.size(); position++) {
             lobby.addTask(selectedTasks.get(position), position);

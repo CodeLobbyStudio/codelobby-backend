@@ -1,6 +1,9 @@
 package pl.codelobby.lobby.dto;
 
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import pl.codelobby.lobby.LobbyStatus;
 
 public record CreateLobbyResponse(
@@ -8,6 +11,8 @@ public record CreateLobbyResponse(
         String name,
         String joinCode,
         String joinUrl,
-        LobbyStatus status
+        LobbyStatus status,
+        Integer maxParticipants,
+        Integer durationMinutes
 ) {
 }
