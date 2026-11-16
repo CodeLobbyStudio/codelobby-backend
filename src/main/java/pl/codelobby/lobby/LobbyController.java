@@ -21,8 +21,11 @@ import pl.codelobby.lobby.dto.JoinLobbyRequest;
 import pl.codelobby.lobby.dto.LobbyDetailsResponse;
 import pl.codelobby.lobby.dto.LobbyRunRequest;
 import pl.codelobby.lobby.dto.LobbyRunResponse;
+import pl.codelobby.lobby.dto.LobbySummaryResponse;
 import pl.codelobby.lobby.dto.LobbyWorkspaceResponse;
 import pl.codelobby.task.ProgrammingLanguage;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/lobbies")
@@ -80,6 +83,11 @@ public class LobbyController {
             @Valid @RequestBody JoinLobbyRequest request
     ) {
         return lobbyFlowService.join(getAuthenticatedUser(jwt), request.code());
+    }
+
+    @GetMapping
+    public List<LobbySummaryResponse> listLobbies(@AuthenticationPrincipal Jwt jwt) {
+        return lobbyFlowService.listForMember(getAuthenticatedUser(jwt).getId());
     }
 
     @GetMapping("/{lobbyId}")

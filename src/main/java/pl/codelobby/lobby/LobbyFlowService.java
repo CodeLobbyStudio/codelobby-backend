@@ -7,6 +7,7 @@ import pl.codelobby.auth.User;
 import pl.codelobby.common.error.ApiException;
 import pl.codelobby.lobby.dto.LobbyDetailsResponse;
 import pl.codelobby.lobby.dto.LobbyRunRequest;
+import pl.codelobby.lobby.dto.LobbySummaryResponse;
 import pl.codelobby.lobby.dto.LobbyWorkspaceResponse;
 import pl.codelobby.task.JavaPublicTests;
 import pl.codelobby.task.ProgrammingLanguage;
@@ -61,6 +62,19 @@ public class LobbyFlowService {
 
         memberRepository.save(new LobbyMember(lobby, user, LobbyRole.PARTICIPANT));
         return toDetails(lobby, LobbyRole.PARTICIPANT, now);
+    }
+
+    @Transactional(readOnly = true)
+    public List<LobbySummaryResponse> listForMember(Long userId) {
+        Instant now = Instant.now();
+        return memberRepository.findAllByUser_Id(userId).stream()
+                .map(member -> {
+                    Lobby lobby = member.getLobby();
+                    return new LobbySummaryResponse(lobby.getId(), lobby.getName(),
+                            lobby.effectiveStatus(now), member.getRole());
+                })
+                .sorted(Comparator.comparing(LobbySummaryResponse::id).reversed())
+                .toList();
     }
 
     @Transactional(readOnly = true)
