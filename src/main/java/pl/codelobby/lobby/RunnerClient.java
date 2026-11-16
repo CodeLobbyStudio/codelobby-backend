@@ -71,7 +71,7 @@ public class RunnerClient {
         } catch (RestClientResponseException exception) {
             int status = exception.getStatusCode().value();
             if (status == 400 || status == 413 || status == 422) {
-                throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "RUN_INPUT_REJECTED",
+                throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "RUN_INPUT_REJECTED",
                         "The task configuration or source files could not be run");
             }
             if (status == 504) {

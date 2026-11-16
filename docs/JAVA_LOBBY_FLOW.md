@@ -4,7 +4,7 @@
 
 1. Uruchom PostgreSQL z repozytorium codelobby-infra. Backend używa lokalnie portu 55433, a aplikacja HTTP portu 8080.
 2. Uruchom Judge0 z nakładką suite reports i codelobby-runner zgodnie z [instrukcją Runnera](https://github.com/CodeLobbyStudio/codelobby-runner#internal-run-endpoint). Udostępnij runnerowi i backendowi ten sam CODELOBBY_INTERNAL_KEY. Klucz ma co najmniej 32 znaki i należy do środowiska obu usług.
-3. Uruchom backend z DB_PASSWORD i JWT_SECRET_BASE64 zgodnie z głównym README. Jeśli Runner ma inny lokalny adres, ustaw RUNNER_BASE_URL. Domyślny adres to http://127.0.0.1:8082.
+3. Uruchom backend z DB_PASSWORD i JWT_SECRET_BASE64 zgodnie z głównym README. Jeśli Runner ma inny lokalny adres, ustaw RUNNER_BASE_URL. Domyślny adres to http://127.0.0.1:8081.
 4. Uruchom frontend z gałęzią integrującą web #30 oraz #27. Użyj oddzielnych sesji przeglądarki dla hosta i uczestnika.
 
 ## Przejście w przeglądarce
