@@ -27,6 +27,8 @@ class LobbyMembershipIntegrationTest {
     @Autowired
     private LobbyPersistenceService lobbyPersistenceService;
     @Autowired
+    private LobbyFlowService lobbyFlowService;
+    @Autowired
     private LobbyMemberRepository memberRepository;
     @Autowired
     private LobbyRepository lobbyRepository;
@@ -58,6 +60,23 @@ class LobbyMembershipIntegrationTest {
         assertEquals(host.getId(), found.getHost().getId());
         assertEquals(LobbyStatus.WAITING, found.getStatus());
         assertNotNull(found.getCreatedAt());
+    }
+
+    @Test
+    void shouldListOnlyLobbiesTheUserHostsOrHasJoined() {
+        User otherHost = userRepository.saveAndFlush(new User("other@example.com", "hash"));
+        User outsider = userRepository.saveAndFlush(new User("outsider@example.com", "hash"));
+        Lobby hosted = lobbyPersistenceService.save("Hosted", "ABCD2345", host);
+        Lobby joined = lobbyPersistenceService.save("Joined", "ABCD2346", otherHost);
+        lobbyFlowService.join(host, joined.getJoinCode());
+
+        var lobbies = lobbyFlowService.listForMember(host.getId());
+        assertEquals(2, lobbies.size());
+        assertEquals(joined.getId(), lobbies.get(0).id());
+        assertEquals(LobbyRole.PARTICIPANT, lobbies.get(0).role());
+        assertEquals(hosted.getId(), lobbies.get(1).id());
+        assertEquals(LobbyRole.HOST, lobbies.get(1).role());
+        assertTrue(lobbyFlowService.listForMember(outsider.getId()).isEmpty());
     }
 
     @Test

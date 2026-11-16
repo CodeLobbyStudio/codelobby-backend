@@ -2,6 +2,8 @@
 package pl.codelobby.task;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +29,10 @@ public class TaskLanguage {
         @Enumerated(EnumType.STRING)
         @Column(nullable = false, length = 20)
         private ProgrammingLanguage language;
+
+        @JdbcTypeCode(SqlTypes.JSON)
+        @Column(name = "java_public_tests", columnDefinition = "jsonb")
+        private JavaPublicTests javaPublicTests;
 
         @OneToMany(
                 mappedBy = "taskLanguage",
@@ -70,6 +76,14 @@ public class TaskLanguage {
 
         public ProgrammingLanguage getLanguage() {
                 return language;
+        }
+
+        public JavaPublicTests getJavaPublicTests() {
+                return javaPublicTests;
+        }
+
+        void configureJavaPublicTests(JavaPublicTests tests) {
+                javaPublicTests = new JavaPublicTests(tests.mainClass(), List.copyOf(tests.testIds()));
         }
 
         public List<TaskFile> getFiles() {

@@ -1,6 +1,7 @@
 
 package pl.codelobby.lobby;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -19,7 +20,10 @@ public interface LobbyMemberRepository
             Long userId
     );
 
+    long countByLobby_Id(Long lobbyId);
+
     List<LobbyMember> findAllByLobby_Id(Long lobbyId);
 
+    @EntityGraph(attributePaths = "lobby")
     List<LobbyMember> findAllByUser_Id(Long userId);
 }

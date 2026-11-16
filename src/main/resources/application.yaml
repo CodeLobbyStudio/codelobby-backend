@@ -20,3 +20,6 @@ spring:
 app:
   jwt:
     secret-base64: ${JWT_SECRET_BASE64}
+  runner:
+    base-url: ${RUNNER_BASE_URL:http://127.0.0.1:8081}
+    internal-key: ${CODELOBBY_INTERNAL_KEY:}
