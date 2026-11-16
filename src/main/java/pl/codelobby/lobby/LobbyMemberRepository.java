@@ -19,6 +19,8 @@ public interface LobbyMemberRepository
             Long userId
     );
 
+    long countByLobby_Id(Long lobbyId);
+
     List<LobbyMember> findAllByLobby_Id(Long lobbyId);
 
     List<LobbyMember> findAllByUser_Id(Long userId);

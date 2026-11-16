@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import pl.codelobby.task.JavaPublicTests;
 import pl.codelobby.task.ProgrammingLanguage;
 
 import java.util.List;
@@ -16,6 +17,12 @@ public record TaskLanguageRequest (
         @NotEmpty
         @Size(max = 50)
         @Valid
-        List<@NotNull TaskFileRequest> files
+        List<@NotNull TaskFileRequest> files,
+
+        @Valid
+        JavaPublicTests javaPublicTests
 ) {
+    public TaskLanguageRequest(ProgrammingLanguage language, List<TaskFileRequest> files) {
+        this(language, files, null);
+    }
 }

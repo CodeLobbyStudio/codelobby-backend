@@ -9,6 +9,8 @@ import pl.codelobby.common.error.ApiException;
 import pl.codelobby.task.dto.*;
 import pl.codelobby.task.validation.TaskFileValidator;
 
+import java.util.HashSet;
+
 @Service
 public class TaskService {
 
@@ -108,9 +110,31 @@ public class TaskService {
                         fileRequest.content()
                 );
             }
+            if (languageRequest.javaPublicTests() != null) {
+                configurePublicTests(taskLanguage, languageRequest.javaPublicTests());
+            }
         }
 
         return task;
+    }
+
+    private void configurePublicTests(TaskLanguage language, JavaPublicTests tests) {
+        boolean hasPublicSource = language.getFiles().stream()
+                .anyMatch(file -> file.getType() == TaskFileType.VISIBLE_TEST);
+        boolean javaSources = language.getFiles().stream()
+                .filter(file -> file.getType() != TaskFileType.HIDDEN_TEST)
+                .allMatch(file -> file.getPath().endsWith(".java"));
+
+        if (language.getLanguage() != ProgrammingLanguage.JAVA || !hasPublicSource || !javaSources
+                || new HashSet<>(tests.testIds()).size() != tests.testIds().size()) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_JAVA_PUBLIC_TESTS",
+                    "Java Run needs Java source files, a public test file, and unique case IDs"
+            );
+        }
+
+        language.configureJavaPublicTests(tests);
     }
 
     private TaskLanguageResponse toLanguageResponse(TaskLanguage taskLanguage) {
@@ -118,7 +142,8 @@ public class TaskService {
                 taskLanguage.getLanguage(),
                 taskLanguage.getFiles().stream()
                         .map(this::toFileResponse)
-                        .toList()
+                        .toList(),
+                taskLanguage.getJavaPublicTests()
         );
     }
 

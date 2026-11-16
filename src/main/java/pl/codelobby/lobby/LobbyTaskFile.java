@@ -46,5 +46,19 @@ public class LobbyTaskFile {
         this.content = content;
     }
 
+    ProgrammingLanguage getLanguage() {
+        return language;
+    }
 
+    String getPath() {
+        return path;
+    }
+
+    TaskFileType getType() {
+        return type;
+    }
+
+    String getContent() {
+        return content;
+    }
 }

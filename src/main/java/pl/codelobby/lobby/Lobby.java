@@ -7,6 +7,7 @@ import pl.codelobby.task.ProgrammingLanguage;
 import pl.codelobby.task.Task;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -29,6 +30,12 @@ public class Lobby {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private LobbyStatus status = LobbyStatus.WAITING;
+
+    @Column(name = "started_at")
+    private Instant startedAt;
+
+    @Column(name = "ends_at")
+    private Instant endsAt;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -54,7 +61,8 @@ public class Lobby {
     private int durationMinutes;
 
     @OneToMany(mappedBy = "lobby", cascade = CascadeType.PERSIST)
-    List<LobbyTask> taskList = new ArrayList<>();
+    @OrderBy("position ASC")
+    private List<LobbyTask> taskList = new ArrayList<>();
 
     protected Lobby() {
     }
@@ -100,8 +108,48 @@ public class Lobby {
         return joinCode;
     }
 
+    String getJoinUrl() {
+        return "/lobbies/join?code=" + joinCode;
+    }
+
     public LobbyStatus getStatus() {
         return status;
+    }
+
+    LobbyStatus effectiveStatus(Instant now) {
+        if (status == LobbyStatus.ACTIVE && endsAt != null && !now.isBefore(endsAt)) {
+            return LobbyStatus.FINISHED;
+        }
+        return status;
+    }
+
+    void start(Instant now) {
+        status = LobbyStatus.ACTIVE;
+        startedAt = now;
+        endsAt = now.plus(durationMinutes, ChronoUnit.MINUTES);
+    }
+
+    void finish(Instant now) {
+        status = LobbyStatus.FINISHED;
+        if (now.isBefore(endsAt)) {
+            endsAt = now;
+        }
+    }
+
+    Instant getStartedAt() {
+        return startedAt;
+    }
+
+    Instant getEndsAt() {
+        return endsAt;
+    }
+
+    Set<ProgrammingLanguage> getAllowedLanguages() {
+        return Set.copyOf(allowedLanguages);
+    }
+
+    List<LobbyTask> getTasks() {
+        return List.copyOf(taskList);
     }
 
     public Instant getCreatedAt() {
